@@ -66,14 +66,14 @@ void setup() {
 
   SerialUSB.begin(9600);
 
-  while (!SerialUSB); // wait for a serial connection
+  while (!Serial); // wait for a serial connection
 
   SerialUSB.println("PROGRAM IS RUNNING");
 } // end setup
 
 
 // --------------------------------------------------------------------------------------------------
-// CUSTOM FUNCTIONS
+// CUSTOM F UNCTIONS
 // --------------------------------------------------------------------------------------------------
 
 void press_button(int button, int btn_value) {
@@ -91,7 +91,7 @@ void press_button(int button, int btn_value) {
   
   if (read_value == btn_value) {
     // create request url
-    String request = server + route + "?name="+node_name+"&btn=" + String(button) + "&state=" + String(read_value);
+    String request = server + route + "?name="+node_name+"&btn=btn_" + String(button) + "&state=" + String(read_value);
 
     // Print request url for debug
     SerialUSB.println(request);
@@ -117,7 +117,7 @@ void read_level(){
   
   // READ ANALOGUE PIN
   sensorValue = analogRead(sensorPin);
-  
+  SerialUSB.println(sensorValue);
   bool send_data = false;               // for checking send data or not end of the function
 
   // 0-25%
