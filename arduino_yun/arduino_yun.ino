@@ -4,13 +4,16 @@
 
 HttpClient client;
 
+
 // --------------------------------------------------------------------------------------------------
 // SET CONFIGURATION PARAMETERS
 // --------------------------------------------------------------------------------------------------
 
 String server           = "http://192.168.1.100";                       // server address
-String route            = "/arduino/action.php";                        // server url path
+String route            = "/api/arduino";                        // server url path
 String node_name        = "node_1";                                     // Arduino name
+int online              = 1;                                            // Check arduino online or not
+
 
 int btn_pin_2           = 2;                                            // button pin 2
 int btn_pin_3           = 3;                                            // button pin 3
@@ -18,11 +21,11 @@ int btn_pin_5           = 5;                                            // butto
 int btn_pin_6           = 6;                                            // button pin 6
 int btn_pin_7           = 7;                                            // button pin 7
 
-int btn_state_2         = 1;                                            // default button states
-int btn_state_3         = 1;                                            // ..
-int btn_state_5         = 1;                                            // ..
-int btn_state_6         = 1;                                            // ..
-int btn_state_7         = 1;                                            // ..
+int btn_state_2         = -1;                                            // default button states
+int btn_state_3         = -1;                                            // ..
+int btn_state_5         = -1;                                            // ..
+int btn_state_6         = -1;                                            // ..
+int btn_state_7         = -1;                                            // ..
 
 int led                 = 8;                                            // indicator led
 int sensorPin           = A0;                                           // analogue sensor pin
@@ -91,7 +94,7 @@ void press_button(int button, int btn_value) {
   
   if (read_value == btn_value) {
     // create request url
-    String request = server + route + "?name="+node_name+"&btn=btn_" + String(button) + "&state=" + String(read_value);
+    String request = server + route + "/button/?name="+node_name+"&btn=btn_" + String(button) + "&state=" + String(read_value);
 
     // Print request url for debug
     SerialUSB.println(request);
@@ -102,6 +105,21 @@ void press_button(int button, int btn_value) {
     delay(200);
   }
 } // end press_button
+
+
+void change_pin_states(){
+  // RESET PIN STATES AND SENSOR VALUE
+  btn_state_2         = -1;
+  btn_state_3         = -1;
+  btn_state_5         = -1;
+  btn_state_6         = -1;
+  btn_state_7         = -1;
+
+  sensorValue         = 0;
+  for(int i = 0; i<sizeof(send_level); i++){
+    send_level[i] = 0;
+  }
+}
 
 
 
@@ -117,7 +135,7 @@ void read_level(){
   
   // READ ANALOGUE PIN
   sensorValue = analogRead(sensorPin);
-  SerialUSB.println(sensorValue);
+//  SerialUSB.println(sensorValue);
   bool send_data = false;               // for checking send data or not end of the function
 
   // 0-25%
@@ -165,7 +183,7 @@ void read_level(){
   if( send_data == true ){
 
     // create request url
-    String request = server + route + "?name="+node_name+"&value=" + String(sensorValue);
+    String request = server + route + "/presure/?name="+node_name+"&value=" + String(sensorValue);
     
     // CALL SEND REQUEST FUNCTION
     make_request(request);
@@ -191,29 +209,47 @@ void status_led(){
 
 
 
+
+
 void make_request(String request)
 {
   // Make a HTTP request:
-  
-  client.get(request);
+    client.get(request);
 
-  // if there are incoming bytes available
-  // from the server, read them and print them:
-  
-  String responce = "";
-  
-  while (client.available()) {
-    char c = client.read();
-    responce += c;
-  }
-  
-  if( responce != "" && responce.endsWith("#OK") ){
-    status_led();
-    SerialUSB.println(responce);
-  }
-  
-  SerialUSB.flush();
+    // if there are incoming bytes available
+    // from the server, read them and print them:
+    
+    String responce = "";
+    
+    while (client.available()) {
+      char c = client.read();
+      responce += c;
+    }
+    
+    if( responce != "" && responce.endsWith("#OK") ){
+      status_led();
+      online = 1;
+      SerialUSB.println(responce);
+    }else {
+      Serial.println("OFFLINE");
+      online = 0;
+      Serial.println("Can't conect to web server");
+    }
+    SerialUSB.flush();
+   
 } // end make_request
+
+
+void test_request(){
+
+    // REQUEST STRING STRUCTURE
+    String request = server + route + "/test";
+    // CALL SEND REQUEST FUNCTION
+    make_request(request);
+    // DELAY 1 SECOND AFTER REQUEST
+    delay(500);
+  }
+
 
 // --------------------------------------------------------------------------------------------------
 // END CUSTOM FUNCTIONS
@@ -226,6 +262,16 @@ void make_request(String request)
 // --------------------------------------------------------------------------------------------------
 
 void loop() {
+
+   while( online == 0 ){
+    Serial.println("------------------TEST REQUEST-------------------");
+    
+    test_request();
+    change_pin_states();
+    delay(2000);
+    
+    Serial.println("----------------END TEST REQUEST-------------------");
+  }
 
   // READ INPUT PINS
   int read_pin_2 = digitalRead(btn_pin_2);
