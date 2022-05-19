@@ -17,17 +17,20 @@
 
 
 
-IPAddress ip(192, 168, 1, 10);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress gateway(192, 168, 1, 1);
-IPAddress myDns(192, 168, 1, 1);
-
+IPAddress   ip(192, 168, 1, 10);
+IPAddress   subnet(255, 255, 255, 0);
+IPAddress   gateway(192, 168, 1, 1);
+IPAddress   myDns(192, 168, 1, 1);
+int         port = 80;
 
 byte server[]           = {192, 168, 1, 100};                           // static server IP
+
 byte mac[]              = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};         // MAC Address
 
-String url              = "/arduino/action.php";                        // server url path
+String url              = "/api/arduino";                               // server url path
 String node_name        = "node_1";                                     // Arduino name
+int online              = 1;                                            // Check arduino online or not
+
 
 int btn_pin_2           = 2;
 int btn_pin_3           = 3;
@@ -35,11 +38,11 @@ int btn_pin_5           = 5;
 int btn_pin_6           = 6;
 int btn_pin_7           = 7;
 
-int btn_state_2         = 1;
-int btn_state_3         = 1;
-int btn_state_5         = 1;
-int btn_state_6         = 1;
-int btn_state_7         = 1;
+int btn_state_2         = -1;
+int btn_state_3         = -1;
+int btn_state_5         = -1;
+int btn_state_6         = -1;
+int btn_state_7         = -1;
 
 int led                 = 8;
 int sensorPin           = A0;                                           // analogue sensor pin
@@ -100,7 +103,15 @@ void setup()
 
   delay(1000);
 
+  Serial.println("\nTEST REQUEST FOR ARP:");
+  Serial.println("------------------------------");
+  test_request();
+  Serial.println("------------------------------");
+  delay(1000);
 }
+
+
+
 
 
 void press_button(int button, int btn_value) {
@@ -110,7 +121,7 @@ void press_button(int button, int btn_value) {
     String request = "";
     // REQUEST STRING STRUCTURE
     request += "GET " + url;
-    request += "?btn=btn_" + String(button);
+    request += "/button/?btn=btn_" + String(button);
     request += "&state=" + String(read_value);
     request += "&name=" + node_name;
     request += " HTTP/1.1";
@@ -126,8 +137,8 @@ void press_button(int button, int btn_value) {
 void read_level(){
   // READ ANALOGUE PIN
   sensorValue = analogRead(sensorPin);
-  Serial.print("Presure Val: ");
-  Serial.println(sensorValue);
+  //  Serial.print("Presure Val: ");
+  //  Serial.println(sensorValue);
   bool send_data = false;
 
   // 0-25%
@@ -177,7 +188,7 @@ void read_level(){
     // REQUEST STRING STRUCTURE
     String request = "";
     request += "GET " + url;
-    request += "?value=" + String(sensorValue);
+    request += "/presure/?value=" + String(sensorValue);
     request += "&name=" + node_name;
     request += " HTTP/1.1";
     
@@ -185,6 +196,20 @@ void read_level(){
     make_request(request);
     // DELAY 1 SECOND AFTER REQUEST
     delay(500);
+  }
+}
+
+void change_pin_states(){
+  // RESET PIN STATES AND SENSOR VALUE
+  btn_state_2         = -1;
+  btn_state_3         = -1;
+  btn_state_5         = -1;
+  btn_state_6         = -1;
+  btn_state_7         = -1;
+
+  sensorValue         = 0;
+  for(int i = 0; i<sizeof(send_level); i++){
+    send_level[i] = 0;
   }
 }
 
@@ -200,17 +225,87 @@ void status_led(){
   }
 }
 
+void make_request(String request)
+{
+ 
+  if (client.connect(server, port))
+  {
+    Serial.println(request);
+
+    client.println(request);
+    client.println("Host: 192.168.1.100");
+    client.println("Connection: close");
+    client.println();
+
+    delay(50);
+
+    String responce = "";  // answer variable
+
+    while (true)
+    {
+      if (client.available())
+      {
+        char ch = client.read();
+        responce += String(ch);
+      }
+      // if there isn't anything left to be read from the server display the message
+      if (!client.connected())
+      { client.stop();
+        break;
+      }
+    }
+
+    if(responce.endsWith("#OK")) {
+        status_led();
+        online = 1;
+    }else{
+        Serial.println("OFFLINE");
+        online = 0;
+    }
+    Serial.println(responce);
+  } else {
+    Serial.println("OFFLINE");
+    online = 0;
+    Serial.println("Can't conect to web server");
+  }
+}
+
+void test_request(){
+
+    String request = "";
+    // REQUEST STRING STRUCTURE
+    request += "GET " + url;
+    request += "/test";
+    request += " HTTP/1.1";
+
+    // CALL SEND REQUEST FUNCTION
+    make_request(request);
+    // DELAY 1 SECOND AFTER REQUEST
+    delay(500);
+  }
+
 
 
 void loop()
 {
+
+  while( online == 0 ){
+    Serial.println("------------------TEST REQUEST-------------------");
+    
+    test_request();
+    change_pin_states();
+    delay(2000);
+    
+    Serial.println("----------------END TEST REQUEST-------------------");
+  }
+  
   // READ INPUT PINS
   int read_pin_2 = digitalRead(btn_pin_2);
   int read_pin_3 = digitalRead(btn_pin_3);
   int read_pin_5 = digitalRead(btn_pin_5);
   int read_pin_6 = digitalRead(btn_pin_6);
   int read_pin_7 = digitalRead(btn_pin_7);
-
+    
   if ( read_pin_2 != btn_state_2 ) {
     press_button(2, read_pin_2);
     // CHANGE PIN CURRENT STATUS
@@ -248,45 +343,4 @@ void loop()
 //    time_now = millis();
 //    read_level();
 //  }
-}
-
-
-void make_request(String request)
-{
-  if (client.connect(server, 80))
-  {
-    Serial.println(request);
-
-    client.println(request);
-    client.println("Host: 192.168.1.100");
-    client.println("Connection: close");
-    client.println();
-
-    delay(50);
-
-    String responce = "";  // answer variable
-
-    while (true)
-    {
-      if (client.available())
-      {
-        char ch = client.read();
-        responce += String(ch);
-      }
-      // if there isn't anything left to be read from the server display the message
-      if (!client.connected())
-      { client.stop();
-        break;
-      }
-    }
-
-    if(responce.endsWith("#OK")) {
-        status_led();
-    }
-
-    
-    Serial.println(responce);
-  } else {
-    Serial.println("Can't conect to web server");
-  }
 }
